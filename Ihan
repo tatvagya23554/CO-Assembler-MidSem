@@ -1,0 +1,255 @@
+opcodes={"add":"00000","sub":"00001","mov":"00010","ld":"00100","st":"00101","mul":"00110","div":"00111","rs":"01000","ls":"01001","xor":"01010","or":"01011","and":"01100","not":"01101","cmp":"01110","jmp":"01111","jlt":"10000","jgt":"10001","je":"10010","hlt":"10011"}
+registers={"R0":"000","R1":"001","R2":"010","R3":"011","R4":"100","R5":"101","R6":"110","FLAGS":"111"}
+
+labels = {}     #dictionary for label
+label_var = {}  #stores variables
+errorlist = []  #stores all error
+outputlist = [] #stores all machinecode
+
+def labeler(main_file):
+    counter = 1
+    for _ in main_file:
+        temp_lable = _.split()
+        if temp_lable and temp_lable[0].endswith(":"):  # ensuring that label is followed by :
+            label = temp_lable[0][:-1] 
+            labels[label] = counter
+            counter = counter + 1
+            
+def variable(file):
+    counter = 1
+    for _ in file:
+        words = _.split()
+        if len(words) >= 2 and words[0] == "var":
+            for i in range(1,len(words)):
+                variable_name = words[i]
+                label_var[variable_name] = counter
+                counter = counter + 1
+
+
+def error_compilation(line,total_lines,count,errorlist):  #temp-->single line instr, count-->no of instr,TOTAL_lines-->last instr of file
+        lst=line.split()
+        m_label=lst[0]
+        temp=len(m_label)
+        
+        if(m_label[:temp-1] in labels.keys()):
+            lst.remove(lst[0])  #removing label name if already exist
+        
+        elif(len(lst)==4):
+            label =lst[0]
+            r1=lst[1]
+            r2=lst[2]
+            r3=lst[3]
+            if(label  =="and" or  label =="or"  or label =="add" or label  =="sub" or label  =="xor" or label  =="mul" ):
+                if( r1 in registers and r2 in registers and r3 in registers  ):
+                    return 1
+                else :
+                    errorlist.append("invalid registers instruction on line Number " + str(count))
+
+            else :
+                errorlist.append("Invalid Syntax on line Number" + str(count))
+            
+        elif(len(lst)==3):
+            label =lst[0]
+            var1=lst[1]
+            var2=lst[2]
+            if( label =="rs" or label =="ls" or label =="mov"  or label =="not" or label =="ld" or label =="div" or label =="st" or label =="cmp"):
+                if(var1 in registers.keys()):
+                    
+                   if(label =="mov"):
+                       if((var2[0]=="$"and 0<=int(var2[1:])<=128) or ( var2 in registers.keys())):
+                           return 1
+                       else:
+                           errorlist.append("Invalid Syntax for mov on line Number "+ str(count))
+                           return 0
+                           
+                   elif(label =="div" or  label =="cmp" or label =="not"):
+                       if(var2 in registers.keys()):
+                           return 1
+                       else :
+                           errorlist.append("Invalid second registers " + str(count))
+                           return 0
+                       
+                   elif(label =="ls" or label =="rs"):
+                       if (0 <= int(var2[1:]) <= 128 and var2[0] == "$" ):
+                           return 1
+                       else:
+                           errorlist.append("Invalid value for ls and rs type instruction on line Number "+ str(count))
+
+                   elif(label =="st" or label =="ld"):
+                       if(var2 in label_var.keys()): #checking if mem_add is correct binary
+                           return 1
+                       else :
+                           errorlist.append("Invalid variable on line Number "+str(count))
+                        
+                           return 0
+                else:
+                    errorlist.append("invalid registers instruction on line Number "+str(count))
+                  
+            else:
+                errorlist.append("Invalid instruction syntax on line Number "+str(count))
+               
+                return 0
+                
+       
+        elif(len(lst)==2):
+            label =lst[0]
+            value=lst[1]    # making sure var is alphanumeric or _
+            
+            if( label =="je" or label =="jgt" or label =="jlt" or label =="jmp" or label =="var"):
+                if(label =="var"):
+                    if(count!=1):
+                        errorlist.append("VAR not declared at top & error on line Number "+ str(count))
+                       
+                    else:
+                        for i in value:
+                            if(i in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890_"):
+                                continue
+                            else:
+                                errorlist.append("variable name incorrect ,on line NO "+ str(count))
+                                return 0
+                                
+                elif( label =="je" or label =="jgt" or label  =="jmp"  or label =="jlt"):
+                    x = labels.keys()
+                    if(value in x):
+                        return 1
+                    else:
+                        errorlist.append("incorrect label label not declared"+str(count))
+                        return 0
+                        
+            else:
+                errorlist.append("Typo error in instruction name,on line NO "+str(count))
+                return 0
+                
+                
+        elif(len(lst)==1):
+            if(count==total_lines and lst[0]=="hlt"):  #making sure hlt is last
+
+                return 1
+            else:
+                errorlist.append("hlt is not present at last ,present at line NO "+str(count))
+                return 0
+        else:
+            errorlist.append("general syntax error,on line NO "+str(count))
+          
+            
+            
+            
+def Decimal_TO_Binary(num): #Converts decimal number to a binary number of 7 bits
+    num=int(num[1:])
+    s = bin(num).replace("0b", "")
+    s = str(s)
+    if len(s) < 7:
+        while len(s) < 7:
+            s = "0" + s
+
+    return s
+
+    
+def assembler(lines):
+
+    for command in lines:
+        word_list = command.split()
+        temp=len(word_list[0])
+        if(word_list[0][:temp-1] in labels):
+            word_list.remove(word_list[0])
+        elif(len(word_list)==1 and word_list[0] == "hlt"):
+            outputlist.append(str(opcodes["hlt"]) + "00000000000")
+            
+            break
+        
+        else:
+            if(len(word_list)==4):
+                strings = ""
+                strings = strings + opcodes[word_list[0]]
+                strings = strings + "00"
+                strings = registers[word_list[1]]
+                strings = strings + registers[word_list[2]]
+                strings = strings + registers[word_list[3]]
+                outputlist.append(strings)
+        
+            elif(len(word_list)==3):
+                strings=""
+                if(word_list[0]=="mov"):
+                    if(word_list[2] in registers):
+                        strings="00011"
+                        strings = strings + "00000"
+                        strings = strings + registers[word_list[1]]
+                        strings = strings + registers[word_list[2]]
+                        outputlist.append(strings)
+                    else:
+                        strings=opcodes[word_list[0]]
+                        strings = strings + "0"
+                        strings = strings +registers[word_list[1]]
+                        Str2 = Decimal_TO_Binary(word_list[2])
+
+                        strings = strings + Str2
+                        outputlist.append(strings)
+
+                elif word_list[0] in {"div", "cmp", "not"}:                    
+                    strings = ""
+                    strings = strings +opcodes[word_list[0]]
+                    strings = strings + "00000"
+                    strings = strings +registers[word_list[1]]
+                    strings = strings +registers[word_list[2]]
+                    outputlist.append(strings)
+                elif word_list[0] in {"ld", "st",}:                    
+                    strings = ""
+                    strings = strings +opcodes[word_list[0]]
+                    strings = strings +registers[word_list[1]]
+                    Str2=Decimal_TO_Binary(word_list[2])
+                    strings = strings + Str2
+                    outputlist.append(strings)
+                elif word_list[0] in {"rs", "ls"}:                    
+                    strings=""
+                    strings+=opcodes[word_list[0]]
+                    strings+=registers[word_list[1]]
+                    Str2 = Decimal_TO_Binary(word_list[2])
+                    strings = strings + Str2
+                    outputlist.append(strings)
+            elif(len(word_list)==2):
+                strings = ""
+                if(word_list[0]!="var"):
+                    strings = strings +opcodes[word_list[0]]+"0000"
+                    Str2 = Decimal_TO_Binary(word_list[1])
+                    strings = strings + Str2
+                    outputlist.append(strings)
+    
+def main():
+    F = open("input.txt","r")
+    main_file=[]
+    for line in F:
+        if(line!="" and line!="\n"):
+            main_file.append(line)
+
+    F.close()
+    flag=1    
+    variable(main_file)    
+    labeler(main_file)
+    
+    OUT = open("output.txt","a")
+    counter=1
+    if(len(main_file) <= 128):
+        for line in main_file:
+            if (counter>128):
+                break
+            else:
+                flag = error_compilation(line,len(main_file),counter,errorlist)
+                counter = counter + 1
+        if(main_file[-1][0:3]!= "hlt" ):
+            errorlist.append("hlt is missing at the end")
+        
+                
+        if(len(errorlist) > 0):
+            for i in errorlist:
+                OUT.write(i)
+                OUT.write("\n")
+    
+                
+        else:
+            assembler(main_file)
+            for i in outputlist:
+                OUT.write(i)
+                OUT.write("\n")
+    else:
+        print("Invalid Number of Instructions or Number of Instructions exceeds 128.")
+    OUT.close()
